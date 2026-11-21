@@ -1,0 +1,99 @@
+# nginx.conf.example
+#
+# Пример конфигурации nginx для rb-monitor.
+# Скопируй в /etc/nginx/sites-available/rb-monitor, отредактируй под своё окружение
+# и выполни: nginx -t && systemctl reload nginx
+#
+# Переменные для замены:
+#   YOUR_DOMAIN   — домен сайта, например games.example.com
+#   APP_PORT      — порт Node.js (по умолчанию 4000, задаётся в .env)
+#   /path/to/cert — путь к SSL-сертификатам
+#   BASE_PATH     — sub-path из .env (например /rb), или пусто если на корне
+
+# ─── Вариант 1: приложение на корне / ─────────────────────────────────────────
+# BASE_PATH= (пусто), VITE_BASE_PATH= (пусто)
+
+server {
+    listen 80;
+    server_name YOUR_DOMAIN;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name YOUR_DOMAIN;
+
+    ssl_certificate     /path/to/cert/fullchain.pem;
+    ssl_certificate_key /path/to/cert/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+
+    # Socket.io — отдельный блок с WebSocket upgrade
+    location /socket.io/ {
+        proxy_pass http://127.0.0.1:APP_PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host       $http_host;
+        proxy_set_header X-Real-IP          $remote_addr;
+        proxy_set_header X-Forwarded-For    $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto  $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:APP_PORT;
+        proxy_set_header Host               $http_host;
+        proxy_set_header X-Real-IP          $remote_addr;
+        proxy_set_header X-Forwarded-For    $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto  $scheme;
+    }
+}
+
+
+# ─── Вариант 2: приложение на sub-path /rb/ ───────────────────────────────────
+# BASE_PATH=/rb, VITE_BASE_PATH=/rb
+# Полезно когда на том же домене уже есть другой сервис (Grafana, etc.)
+
+server {
+    listen 80;
+    server_name YOUR_DOMAIN;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name YOUR_DOMAIN;
+
+    ssl_certificate     /path/to/cert/fullchain.pem;
+    ssl_certificate_key /path/to/cert/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+
+    # Socket.io — длиннее /rb/, поэтому nginx выбирает его первым
+    location /rb/socket.io/ {
+        proxy_pass http://127.0.0.1:APP_PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host       $http_host;
+        proxy_set_header X-Real-IP          $remote_addr;
+        proxy_set_header X-Forwarded-For    $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto  $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    location /rb/ {
+        proxy_pass http://127.0.0.1:APP_PORT;
+        proxy_set_header Host               $http_host;
+        proxy_set_header X-Real-IP          $remote_addr;
+        proxy_set_header X-Forwarded-For    $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto  $scheme;
+    }
+
+    # Здесь можно добавить другие сервисы на том же домене:
+    # location /grafana/ { proxy_pass http://127.0.0.1:3000; ... }
+    # location / { ... }
+}

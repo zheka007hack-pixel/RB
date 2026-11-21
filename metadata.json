@@ -1,0 +1,5 @@
+{
+  "name": "RB Monitor",
+  "description": "Real-time Raid Boss respawn monitoring system with interactive map and RBAC.",
+  "requestFramePermissions": []
+}

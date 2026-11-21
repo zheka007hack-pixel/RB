@@ -1,0 +1,14 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+/prisma/*.db
+/prisma/*.db-journal
+/backups/
+logs/
+/pnpm-workspace.yaml
+/scripts/providers/url-list/cache/
