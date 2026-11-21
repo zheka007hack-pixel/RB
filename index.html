@@ -1,27 +1,237 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>RB Monitor</title>
-    <script>
-      (() => {
-        try {
-          const storedTheme = localStorage.getItem('rb-monitor-theme');
-          if (/^[a-z0-9_-]+$/i.test(storedTheme || '')) {
-            document.documentElement.dataset.theme = storedTheme;
-          }
-        } catch {
-        }
-      })();
-    </script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.ts"></script>
-  </body>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Трекер рейд-боссов</title>
+<style>
+  :root {
+    --bg: #12141c;
+    --card: #1c1f2b;
+    --accent: #7c5cff;
+    --accent-2: #38d39f;
+    --danger: #ff5c7a;
+    --text: #e8eaf2;
+    --muted: #8a90a6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    padding: 24px 16px;
+  }
+  .container { max-width: 760px; margin: 0 auto; }
+  h1 {
+    text-align: center;
+    margin-bottom: 6px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .subtitle { text-align: center; color: var(--muted); margin-bottom: 24px; font-size: 14px; }
+  .panel {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.35);
+  }
+  .add-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .add-row input[type="text"] {
+    flex: 2 1 200px;
+    background: #14161f;
+    border: 1px solid #2c3040;
+    border-radius: 8px;
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: 15px;
+  }
+  .add-row input[type="number"] {
+    flex: 1 1 100px;
+    background: #14161f;
+    border: 1px solid #2c3040;
+    border-radius: 8px;
+    color: var(--text);
+    padding: 10px 12px;
+    font-size: 15px;
+  }
+  button {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 15px;
+    cursor: pointer;
+    transition: filter .15s;
+  }
+  button:hover { filter: brightness(1.15); }
+  button.ghost {
+    background: transparent;
+    border: 1px solid #2c3040;
+    color: var(--muted);
+  }
+  .boss-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-bottom: 1px solid #262a38;
+  }
+  .boss-item:last-child { border-bottom: none; }
+  .boss-item.dead { opacity: .55; }
+  .boss-name { flex: 1; font-size: 16px; font-weight: 600; }
+  .boss-item.dead .boss-name { text-decoration: line-through; }
+  .respawn { font-size: 13px; color: var(--muted); min-width: 130px; text-align: right; }
+  .respawn.ready { color: var(--accent-2); font-weight: 600; }
+  .icon-btn {
+    background: none; border: none; font-size: 18px; padding: 4px 8px; color: var(--muted);
+  }
+  .icon-btn.kill { color: var(--accent-2); }
+  .icon-btn.revive { color: var(--accent); }
+  .icon-btn.delete { color: var(--danger); }
+  .stats { display: flex; gap: 16px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; }
+  .stat {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 12px 20px;
+    text-align: center;
+  }
+  .stat .num { font-size: 22px; font-weight: 700; color: var(--accent-2); }
+  .stat .lbl { font-size: 12px; color: var(--muted); }
+  .empty { text-align: center; color: var(--muted); padding: 24px 0; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>⚔ Трекер рейд-боссов</h1>
+  <p class="subtitle">Отмечай убитых боссов и следи за респауном</p>
+
+  <div class="stats">
+    <div class="stat"><div class="num" id="stat-total">0</div><div class="lbl">Всего боссов</div></div>
+    <div class="stat"><div class="num" id="stat-alive">0</div><div class="lbl">Живых</div></div>
+    <div class="stat"><div class="num" id="stat-dead">0</div><div class="lbl">Убито</div></div>
+  </div>
+
+  <div class="panel">
+    <div class="add-row">
+      <input type="text" id="boss-name" placeholder="Имя босса, напр. Анкаcac">
+      <input type="number" id="respawn-hours" placeholder="Респаун, ч" min="1" value="24">
+      <button onclick="addBoss()">Добавить</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div id="boss-list"></div>
+  </div>
+
+  <div class="panel">
+    <div class="add-row">
+      <button class="ghost" onclick="exportData()">📤 Экспорт (скачать JSON)</button>
+      <button class="ghost" onclick="document.getElementById('import-file').click()">📥 Импорт</button>
+      <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+      <button class="ghost" onclick="clearAll()">🗑 Очистить всё</button>
+    </div>
+  </div>
+
+  <footer>Данные хранятся в этом браузере (localStorage). Экспортируй JSON, чтобы перенести на другое устройство.</footer>
+</div>
+
+<script>
+const KEY = 'raid_bosses_v1';
+let bosses = JSON.parse(localStorage.getItem(KEY) || '[]');
+
+function save() { localStorage.setItem(KEY, JSON.stringify(bosses)); }
+
+function addBoss() {
+  const nameEl = document.getElementById('boss-name');
+  const hoursEl = document.getElementById('respawn-hours');
+  const name = nameEl.value.trim();
+  const hours = parseInt(hoursEl.value) || 24;
+  if (!name) return;
+  bosses.push({ id: Date.now(), name: name, respawnHours: hours, killedAt: null });
+  nameEl.value = '';
+  save();
+  render();
+}
+
+function toggleKill(id) {
+  const b = bosses.find(x => x.id === id);
+  if (!b) return;
+  b.killedAt = b.killedAt ? null : Date.now();
+  save();
+  render();
+}
+
+function deleteBoss(id) {
+  bosses = bosses.filter(x => x.id !== id);
+  save();
+  render();
+}
+
+function clearAll() {
+  if (!confirm('Удалить всех боссов?')) return;
+  bosses = [];
+  save();
+  render();
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(bosses, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'raid-bosses.json';
+  a.click();
+}
+
+function importData(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (Array.isArray(data)) { bosses = data; save(); render(); }
+    } catch (err) { alert('Не удалось прочитать файл'); }
+  };
+  reader.readAsText(file);
+}
+
+function fmtTimeLeft(ms) {
+  if (ms <= 0) return 'готов к респауну';
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  return h > 0 ? h + ' ч ' + m + ' мин' : m + ' мин';
+}
+
+function render() {
+  const list = document.getElementById('boss-list');
+  if (!bosses.length) {
+    list.innerHTML = '<div class="empty">Боссов пока нет. Добавь первого!</div>';
+  } else {
+    list.innerHTML = bosses.map(b => {
+      const dead = b.killedAt !== null;
+      const readyAt = dead ? b.killedAt + b.respawnHours * 3600000 : 0;
+      const left = readyAt - Date.now();
+      return '<div class="boss-item ' + (dead ? 'dead' : '') + '">' +
+        '<button class="icon-btn ' + (dead ? 'revive' : 'kill') + '" title="' + (dead ? 'Возродить' : 'Отметить убитым') + '" onclick="toggleKill(' + b.id + ')">' + (dead ? '⟳' : '✔') + '</button>' +
+        '<span class="boss-name">' + b.name + '</span>' +
+        '<span class="respawn ' + (dead && left <= 0 ? 'ready' : '') + '">' + (dead ? 'Респаун: ' + fmtTimeLeft(left) : 'жив') + '</span>' +
+        '<button class="icon-btn delete" title="Удалить" onclick="deleteBoss(' + b.id + ')">✕</button>' +
+      '</div>';
+    }).join('');
+  }
+  document.getElementById('stat-total').textContent = bosses.length;
+  document.getElementById('stat-alive').textContent = bosses.filter(b => !b.killedAt).length;
+  document.getElementById('stat-dead').textContent = bosses.filter(b => b.killedAt).length;
+}
+
+setInterval(render, 60000);
+render();
+</script>
+</body>
 </html>
